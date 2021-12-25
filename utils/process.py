@@ -6,6 +6,11 @@ from scipy.sparse.linalg.eigen.arpack import eigsh
 import sys
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from ogb.nodeproppred import NodePropPredDataset
+
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def parse_skipgram(fname):
     with open(fname) as f:
@@ -33,7 +38,7 @@ def process_tu(data, nb_nodes):
     labels = np.zeros(nb_graphs)
     sizes = np.zeros(nb_graphs, dtype=np.int32)
     masks = np.zeros((nb_graphs, nb_nodes))
-       
+
     for g in range(nb_graphs):
         sizes[g] = data[g].x.shape[0]
         features[g, :sizes[g]] = data[g].x
@@ -48,7 +53,7 @@ def process_tu(data, nb_nodes):
 def micro_f1(logits, labels):
     # Compute predictions
     preds = torch.round(nn.Sigmoid()(logits))
-    
+
     # Cast to avoid trouble
     preds = preds.long()
     labels = labels.long()
@@ -102,6 +107,37 @@ def sample_mask(idx, l):
     mask[idx] = 1
     return np.array(mask, dtype=np.bool)
 
+def load_ogbn(dataset_str):
+    dataset = NodePropPredDataset(name = dataset_str)
+    split_idx = dataset.get_idx_split()
+    train_idx, valid_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
+    graph, label = dataset[0]
+    label = torch.tensor(label)
+    X = torch.tensor(graph["node_feat"]).float()
+    try:
+        A = torch.load("A_"+dataset_str+".pt", map_location=device).to(device)
+    except:
+        raise NotImplementedError
+    A = A.to(device).coalesce()
+
+    ###################
+    #converting to the right format now
+    indices = A.indices().cpu().numpy()
+    vals = A.values().cpu().numpy()
+    size = A.size()[0]
+    adj = sp.coo_matrix((vals, (indices[0],indices[1])), shape=(size,size)).tocsr()
+    indices = X.nonzero().t()
+    vals = X[indices[0], indices[1]].cpu().numpy()
+    indices = indices.cpu().numpy()
+    features = sp.coo_matrix((vals, (indices[0],indices[1])), shape=(X.size(0),X.size(1))).tolil()
+    labels = F.one_hot(label.to(torch.int64)).cpu().numpy()
+    #idx_train = train_idx.tolist()
+    #idx_val = val_idx.tolist()
+    #idx_test = test_idx.tolist()
+    return adj, features, labels, train_idx, valid_idx, test_idx
+    #return adj, features, labels, idx_train, idx_val, idx_test
+
+
 def load_data(dataset_str): # {'pubmed', 'citeseer', 'cora'}
     """Load data."""
     names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
@@ -114,6 +150,8 @@ def load_data(dataset_str): # {'pubmed', 'citeseer', 'cora'}
                 objects.append(pkl.load(f))
 
     x, y, tx, ty, allx, ally, graph = tuple(objects)
+    print("tx: " + str(tx))
+    print("allx: " + str(allx))
     test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset_str))
     test_idx_range = np.sort(test_idx_reorder)
 

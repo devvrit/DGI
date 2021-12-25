@@ -6,7 +6,8 @@ import torch.nn as nn
 from models import DGI, LogReg
 from utils import process
 
-dataset = 'cora'
+#dataset = 'cora'
+dataset = 'ogbn-arxiv'
 
 # training params
 batch_size = 1
@@ -15,11 +16,12 @@ patience = 20
 lr = 0.001
 l2_coef = 0.0
 drop_prob = 0.0
-hid_units = 512
+hid_units = 256
 sparse = True
 nonlinearity = 'prelu' # special name to separate parameters
 
-adj, features, labels, idx_train, idx_val, idx_test = process.load_data(dataset)
+#adj, features, labels, idx_train, idx_val, idx_test = process.load_data(dataset)
+adj, features, labels, idx_train, idx_val, idx_test = process.load_ogbn(dataset)
 features, _ = process.preprocess_features(features)
 
 nb_nodes = features.shape[0]
@@ -77,8 +79,8 @@ for epoch in range(nb_epochs):
     if torch.cuda.is_available():
         shuf_fts = shuf_fts.cuda()
         lbl = lbl.cuda()
-    
-    logits = model(features, shuf_fts, sp_adj if sparse else adj, sparse, None, None, None) 
+
+    logits = model(features, shuf_fts, sp_adj if sparse else adj, sparse, None, None, None)
 
     loss = b_xent(logits, lbl)
 
@@ -130,7 +132,7 @@ for _ in range(50):
 
         logits = log(train_embs)
         loss = xent(logits, train_lbls)
-        
+
         loss.backward()
         opt.step()
 
