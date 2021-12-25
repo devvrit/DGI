@@ -2,6 +2,7 @@ import numpy as np
 import scipy.sparse as sp
 import torch
 import torch.nn as nn
+import random
 
 from models import DGI, LogReg
 from utils import process
@@ -10,7 +11,7 @@ from utils import process
 dataset = 'ogbn-arxiv'
 
 # training params
-batch_size = 1
+batch_size = 169343//2
 nb_epochs = 10000
 patience = 20
 lr = 0.001
@@ -28,24 +29,19 @@ nb_nodes = features.shape[0]
 ft_size = features.shape[1]
 nb_classes = labels.shape[1]
 
-adj = process.normalize_adj(adj + sp.eye(adj.shape[0]))
-
-if sparse:
-    sp_adj = process.sparse_mx_to_torch_sparse_tensor(adj)
-else:
-    adj = (adj + sp.eye(adj.shape[0])).todense()
-
-features = torch.FloatTensor(features[np.newaxis])
-if not sparse:
-    adj = torch.FloatTensor(adj[np.newaxis])
 labels = torch.FloatTensor(labels[np.newaxis])
 idx_train = torch.LongTensor(idx_train)
 idx_val = torch.LongTensor(idx_val)
 idx_test = torch.LongTensor(idx_test)
 
-model = DGI(ft_size, hid_units, nonlinearity)
-optimiser = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=l2_coef)
+# adj = process.normalize_adj(adj + sp.eye(adj.shape[0]))
 
+
+if sparse:
+    sp_adj = process.sparse_mx_to_torch_sparse_tensor(adj)
+else:
+    adj = (adj + sp.eye(adj.shape[0])).todense()
+features = torch.FloatTensor(features[np.newaxis])
 if torch.cuda.is_available():
     print('Using CUDA')
     model.cuda()
@@ -59,11 +55,65 @@ if torch.cuda.is_available():
     idx_val = idx_val.cuda()
     idx_test = idx_test.cuda()
 
+
+AX = torch.sparse.mm(sp_adj, features)
+print("AX calculated, size is: " + str(AX.size()))
+if not sparse:
+    adj = torch.FloatTensor(adj[np.newaxis])
+
+model = DGI(ft_size, hid_units, nonlinearity)
+optimiser = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=l2_coef)
+
+
 b_xent = nn.BCEWithLogitsLoss()
 xent = nn.CrossEntropyLoss()
 cnt_wait = 0
 best = 1e9
 best_t = 0
+
+arr = [i for i in range(nb_nodes)]
+
+
+for epoch in range(nb_epochs):
+    i=0
+    tot_loss=0
+    random.shuffle(arr)
+    idx = np.random.permutation(nb_nodes)
+    shuf_fts = features[:, idx, :]
+    AX2 = torch.sparse.mm(sp_adj, shuf_fts)
+    if torch.cuda.is_available():
+        shuf_fts = shuf_fts.cuda()
+    while i<nb_nodes:
+        nodes = arr[i:min(i+batch_size, nb_nodes)]
+        lbl_1 = torch.ones(1, len(nodes))
+        lbl_2 = torch.zeros(1, len(nodes))
+        lbl = torch.cat((lbl_1, lbl_2), 1).to(device)
+
+        logits = model(AX[nodes], AX2[nodes], sparse, None, None, None)
+        loss = b_xent(logits, lbl)
+        print('Loss:', loss)
+
+        loss.backward()
+        optimiser.step()
+        tot_loss+=loss.item()
+    print("TOTAL LOSS in epoch " + str(epoch) + " is: " + str(tot_loss))
+    if tot_loss < best:
+        best = loss
+        best_t = epoch
+        cnt_wait = 0
+        torch.save(model.state_dict(), 'best_dgi.pkl')
+    else:
+        cnt_wait += 1
+
+    if cnt_wait == patience:
+        print('Early stopping!')
+        break
+
+embeds, _ = model.embed(features, sparse, None)
+print("EMBEDDING CALCULATED")
+torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt")
+
+'''
 
 for epoch in range(nb_epochs):
     model.train()
@@ -149,3 +199,4 @@ accs = torch.stack(accs)
 print(accs.mean())
 print(accs.std())
 
+'''

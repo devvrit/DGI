@@ -1,6 +1,23 @@
 import torch
 import torch.nn as nn
 
+class GCN_new(nn.Module):
+    def __init__(self, inp_dim, hidden_dims, act):
+        """
+        :param inp_dim = dimension of X matrix representing node features
+        :param hidden_dims = hidden layer dimensions
+        """
+        super(GCN_new, self).__init__()
+        assert len(hidden_dims)>0
+        self.hidden_dims = hidden_dims
+        self.inp_dim=inp_dim
+        self.Wr = nn.Linear(inp_dim, hidden_dims, bias=True)
+        nn.init.xavier_uniform_(self.Wr.weight)
+        self.g = nn.PReLU() if act == 'prelu' else nn.ReLU()
+
+    def forward(self, AX):
+        return torch.unsqueeze(self.g(self.Wr(AX)), 0)
+
 class GCN(nn.Module):
     def __init__(self, in_ft, out_ft, act, bias=True):
         super(GCN, self).__init__()
