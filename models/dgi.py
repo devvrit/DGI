@@ -1,6 +1,23 @@
 import torch
 import torch.nn as nn
-from layers import GCN, GCN_new, AvgReadout, Discriminator
+from layers import GCN, AvgReadout, Discriminator
+
+class GCN_new(nn.Module):
+    def __init__(self, inp_dim, hidden_dims, act):
+        """
+        :param inp_dim = dimension of X matrix representing node features
+        :param hidden_dims = hidden layer dimensions
+        """
+        super(GCN_new, self).__init__()
+        assert len(hidden_dims)>0
+        self.hidden_dims = hidden_dims
+        self.inp_dim=inp_dim
+        self.Wr = nn.Linear(inp_dim, hidden_dims, bias=True)
+        nn.init.xavier_uniform_(self.Wr.weight)
+        self.g = nn.PReLU() if act == 'prelu' else nn.ReLU()
+
+    def forward(self, AX):
+        return torch.unsqueeze(self.g(self.Wr(AX)), 0)
 
 class DGI(nn.Module):
     def __init__(self, n_in, n_h, activation):
