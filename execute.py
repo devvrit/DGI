@@ -14,8 +14,8 @@ dataset = 'ogbn-arxiv'
 # training params
 #batch_size = 2708
 batch_size = 169343//16
-nb_epochs = 100
-patience = 10
+nb_epochs = 1000
+patience = 30
 lr = 0.0001
 l2_coef = 0.0
 drop_prob = 0.0
@@ -80,7 +80,7 @@ arr = [i for i in range(nb_nodes)]
 for epoch in range(nb_epochs):
     i=0
     tot_loss=0
-    #random.shuffle(arr)
+    random.shuffle(arr)
     #np.random.seed(42)
     idx = np.random.permutation(nb_nodes)
     #print("idx: " + str(idx))
@@ -96,17 +96,18 @@ for epoch in range(nb_epochs):
         lbl_2 = torch.zeros(1, len(nodes))
         lbl = torch.cat((lbl_1, lbl_2), 1).to(device)
 
-        logits = model(AX[nodes], AX2[nodes], sparse, None, None, None)
+        #logits = model(AX[nodes], AX2[nodes], sparse, None, None, None)
+        logits = model(AX, AX2, nodes, sparse, None, None, None)
         loss = b_xent(logits, lbl)
         #print("epoch " + str(epoch) + " Loss: " + str(loss))
 
         loss.backward()
         optimiser.step()
         tot_loss+=loss.item()
-        if epoch==0 and i==0:
-            embeds, _ = model.embed(AX, sparse, None)
-            torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt_temp")
-            del embeds
+        #if epoch==0 and i==0:
+        #    embeds, _ = model.embed(AX, sparse, None)
+        #    torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt_temp")
+        #    del embeds
         i+=batch_size
     embeds, _ = model.embed(AX, sparse, None)
     torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt_epoch_" + str(epoch+1))
@@ -175,6 +176,7 @@ model.load_state_dict(torch.load('best_dgi.pkl'))
 
 embeds, _ = model.embed(features, sp_adj if sparse else adj, sparse, None)
 '''
+'''
 embeds = embeds.unsqueeze(0)
 labels = labels.view(1,nb_nodes,-1)
 print("labels size: " + str(labels.size()))
@@ -223,4 +225,4 @@ print('Average accuracy:', tot / 50)
 accs = torch.stack(accs)
 print(accs.mean())
 print(accs.std())
-
+'''

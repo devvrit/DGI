@@ -33,7 +33,7 @@ class DGI(nn.Module):
 
         self.disc = Discriminator(n_h)
 
-    def forward(self, AX1, AX2, sparse, msk, samp_bias1, samp_bias2):
+    def forward(self, AX1, AX2, nodes, sparse, msk, samp_bias1, samp_bias2):
         # h_1 = self.gcn(seq1, adj, sparse)
         h_1 = self.gcn(AX1)
 
@@ -43,7 +43,7 @@ class DGI(nn.Module):
         # h_2 = self.gcn(seq2, adj, sparse)
         h_2 = self.gcn(AX2)
 
-        ret = self.disc(c, h_1, h_2, samp_bias1, samp_bias2)
+        ret = self.disc(c, h_1[:,nodes,:], h_2[:,nodes,:], samp_bias1, samp_bias2)
 
         return ret
 
