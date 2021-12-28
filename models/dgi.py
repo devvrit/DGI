@@ -9,12 +9,16 @@ class GCN_new(nn.Module):
         :param hidden_dims = hidden layer dimensions
         """
         super(GCN_new, self).__init__()
-        assert len(hidden_dims)>0
         self.hidden_dims = hidden_dims
         self.inp_dim=inp_dim
         self.Wr = nn.Linear(inp_dim, hidden_dims, bias=True)
-        nn.init.xavier_uniform_(self.Wr.weight)
+        #torch.manual_seed(786)
+        nn.init.xavier_uniform_(self.Wr.weight.data)
+        self.Wr.bias.data.fill_(0.0)
         self.g = nn.PReLU() if act == 'prelu' else nn.ReLU()
+        #print("self.Wr.weight.size() is: " + str(self.Wr.weight.size()))
+        #print("self.Wr.weight is: " + str(self.Wr.weight))
+        #print("self.Wr.bias is: " + str(self.Wr.bias))
 
     def forward(self, AX):
         return torch.unsqueeze(self.g(self.Wr(AX)), 0)
@@ -44,9 +48,9 @@ class DGI(nn.Module):
         return ret
 
     # Detach the return variables
-    def embed(self, seq, adj, sparse, msk):
+    def embed(self, AX1, sparse, msk):
         # h_1 = self.gcn(seq, adj, sparse)
-        h_1 = self.gcn(AX1)
+        h_1 = self.gcn(AX1).squeeze(0)
         c = self.read(h_1, msk)
 
         return h_1.detach(), c.detach()

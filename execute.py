@@ -6,15 +6,17 @@ import random
 
 from models import DGI, LogReg
 from utils import process
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 #dataset = 'cora'
 dataset = 'ogbn-arxiv'
 
 # training params
-batch_size = 169343//2
-nb_epochs = 10000
-patience = 20
-lr = 0.001
+#batch_size = 2708
+batch_size = 169343//16
+nb_epochs = 100
+patience = 10
+lr = 0.0001
 l2_coef = 0.0
 drop_prob = 0.0
 hid_units = 256
@@ -27,14 +29,16 @@ features, _ = process.preprocess_features(features)
 
 nb_nodes = features.shape[0]
 ft_size = features.shape[1]
-nb_classes = labels.shape[1]
+nb_classes = labels.shape[-1]
 
 labels = torch.FloatTensor(labels[np.newaxis])
 idx_train = torch.LongTensor(idx_train)
 idx_val = torch.LongTensor(idx_val)
 idx_test = torch.LongTensor(idx_test)
 
-# adj = process.normalize_adj(adj + sp.eye(adj.shape[0]))
+
+#adj = process.normalize_adj(adj + sp.eye(adj.shape[0]))
+adj = process.normalize_adj(adj)
 
 
 if sparse:
@@ -44,7 +48,6 @@ else:
 features = torch.FloatTensor(features[np.newaxis])
 if torch.cuda.is_available():
     print('Using CUDA')
-    model.cuda()
     features = features.cuda()
     if sparse:
         sp_adj = sp_adj.cuda()
@@ -55,13 +58,13 @@ if torch.cuda.is_available():
     idx_val = idx_val.cuda()
     idx_test = idx_test.cuda()
 
-
-AX = torch.sparse.mm(sp_adj, features)
+print("features_size is: " + str(features.size()))
+AX = torch.sparse.mm(sp_adj, features[0])
 print("AX calculated, size is: " + str(AX.size()))
 if not sparse:
     adj = torch.FloatTensor(adj[np.newaxis])
 
-model = DGI(ft_size, hid_units, nonlinearity)
+model = DGI(ft_size, hid_units, nonlinearity).to(device)
 optimiser = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=l2_coef)
 
 
@@ -77,13 +80,17 @@ arr = [i for i in range(nb_nodes)]
 for epoch in range(nb_epochs):
     i=0
     tot_loss=0
-    random.shuffle(arr)
+    #random.shuffle(arr)
+    #np.random.seed(42)
     idx = np.random.permutation(nb_nodes)
+    #print("idx: " + str(idx))
     shuf_fts = features[:, idx, :]
-    AX2 = torch.sparse.mm(sp_adj, shuf_fts)
-    if torch.cuda.is_available():
-        shuf_fts = shuf_fts.cuda()
+    AX2 = torch.sparse.mm(sp_adj, shuf_fts[0]).to(device)
+    #if torch.cuda.is_available():
+    #    shuf_fts = shuf_fts.cuda()
     while i<nb_nodes:
+        model.train()
+        optimiser.zero_grad()
         nodes = arr[i:min(i+batch_size, nb_nodes)]
         lbl_1 = torch.ones(1, len(nodes))
         lbl_2 = torch.zeros(1, len(nodes))
@@ -91,14 +98,22 @@ for epoch in range(nb_epochs):
 
         logits = model(AX[nodes], AX2[nodes], sparse, None, None, None)
         loss = b_xent(logits, lbl)
-        print('Loss:', loss)
+        #print("epoch " + str(epoch) + " Loss: " + str(loss))
 
         loss.backward()
         optimiser.step()
         tot_loss+=loss.item()
+        if epoch==0 and i==0:
+            embeds, _ = model.embed(AX, sparse, None)
+            torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt_temp")
+            del embeds
+        i+=batch_size
+    embeds, _ = model.embed(AX, sparse, None)
+    torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt_epoch_" + str(epoch+1))
     print("TOTAL LOSS in epoch " + str(epoch) + " is: " + str(tot_loss))
+    del embeds
     if tot_loss < best:
-        best = loss
+        best = tot_loss
         best_t = epoch
         cnt_wait = 0
         torch.save(model.state_dict(), 'best_dgi.pkl')
@@ -108,8 +123,12 @@ for epoch in range(nb_epochs):
     if cnt_wait == patience:
         print('Early stopping!')
         break
+    if epoch==10:
+        #print("weight final is: " + str(model.gcn.Wr.weight.data))
+        #print("bias final is: " + str(model.gcn.Wr.bias.data))
+        assert 1==1
 
-embeds, _ = model.embed(features, sparse, None)
+embeds, _ = model.embed(AX, sparse, None)
 print("EMBEDDING CALCULATED")
 torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt")
 
@@ -155,13 +174,19 @@ print('Loading {}th epoch'.format(best_t))
 model.load_state_dict(torch.load('best_dgi.pkl'))
 
 embeds, _ = model.embed(features, sp_adj if sparse else adj, sparse, None)
+'''
+embeds = embeds.unsqueeze(0)
+labels = labels.view(1,nb_nodes,-1)
+print("labels size: " + str(labels.size()))
 train_embs = embeds[0, idx_train]
 val_embs = embeds[0, idx_val]
 test_embs = embeds[0, idx_test]
+print("train_embs size: " + str(train_embs.size()))
 
 train_lbls = torch.argmax(labels[0, idx_train], dim=1)
 val_lbls = torch.argmax(labels[0, idx_val], dim=1)
 test_lbls = torch.argmax(labels[0, idx_test], dim=1)
+print("train_lbls size: " + str(train_lbls.size()))
 
 tot = torch.zeros(1)
 tot = tot.cuda()
@@ -199,4 +224,3 @@ accs = torch.stack(accs)
 print(accs.mean())
 print(accs.std())
 
-'''
