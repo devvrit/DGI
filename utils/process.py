@@ -112,7 +112,7 @@ def load_ogbn(dataset_str):
     split_idx = dataset.get_idx_split()
     train_idx, valid_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
     graph, label = dataset[0]
-    label = torch.tensor(label)
+    label = torch.tensor(label).view(-1)
     X = torch.tensor(graph["node_feat"]).float()
     try:
         A = torch.load("A_"+dataset_str+".pt", map_location=device).to(device)

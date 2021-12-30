@@ -13,9 +13,9 @@ dataset = 'ogbn-arxiv'
 
 # training params
 #batch_size = 2708
-batch_size = 169343//16
+batch_size = round(169343//2.7)
 nb_epochs = 1000
-patience = 30
+patience = 20
 lr = 0.0001
 l2_coef = 0.0
 drop_prob = 0.0
@@ -30,6 +30,7 @@ features, _ = process.preprocess_features(features)
 nb_nodes = features.shape[0]
 ft_size = features.shape[1]
 nb_classes = labels.shape[-1]
+#batch_size = nb_nodes//64
 
 labels = torch.FloatTensor(labels[np.newaxis])
 idx_train = torch.LongTensor(idx_train)
@@ -97,7 +98,7 @@ for epoch in range(nb_epochs):
         lbl = torch.cat((lbl_1, lbl_2), 1).to(device)
 
         #logits = model(AX[nodes], AX2[nodes], sparse, None, None, None)
-        logits = model(AX, AX2, nodes, sparse, None, None, None)
+        logits = model(sp_adj, AX, AX2, nodes, sparse, None, None, None)
         loss = b_xent(logits, lbl)
         #print("epoch " + str(epoch) + " Loss: " + str(loss))
 
@@ -109,7 +110,7 @@ for epoch in range(nb_epochs):
         #    torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt_temp")
         #    del embeds
         i+=batch_size
-    embeds, _ = model.embed(AX, sparse, None)
+    embeds, _ = model.embed(sp_adj, AX, sparse, None)
     torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt_epoch_" + str(epoch+1))
     print("TOTAL LOSS in epoch " + str(epoch) + " is: " + str(tot_loss))
     del embeds
@@ -129,7 +130,9 @@ for epoch in range(nb_epochs):
         #print("bias final is: " + str(model.gcn.Wr.bias.data))
         assert 1==1
 
-embeds, _ = model.embed(AX, sparse, None)
+print('Loading {}th epoch'.format(best_t))
+model.load_state_dict(torch.load('best_dgi.pkl'))
+embeds, _ = model.embed(sp_adj, AX, sparse, None)
 print("EMBEDDING CALCULATED")
 torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt")
 
@@ -175,7 +178,6 @@ print('Loading {}th epoch'.format(best_t))
 model.load_state_dict(torch.load('best_dgi.pkl'))
 
 embeds, _ = model.embed(features, sp_adj if sparse else adj, sparse, None)
-'''
 '''
 embeds = embeds.unsqueeze(0)
 labels = labels.view(1,nb_nodes,-1)
@@ -225,4 +227,3 @@ print('Average accuracy:', tot / 50)
 accs = torch.stack(accs)
 print(accs.mean())
 print(accs.std())
-'''
