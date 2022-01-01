@@ -13,13 +13,13 @@ dataset = 'ogbn-arxiv'
 
 # training params
 #batch_size = 2708
-batch_size = round(169343//2.7)
+# batch_size = round(169343//2.7)
 nb_epochs = 1000
-patience = 20
+patience = 25
 lr = 0.0001
 l2_coef = 0.0
 drop_prob = 0.0
-hid_units = 256
+hid_units = [256,256]
 sparse = True
 nonlinearity = 'prelu' # special name to separate parameters
 
@@ -30,7 +30,7 @@ features, _ = process.preprocess_features(features)
 nb_nodes = features.shape[0]
 ft_size = features.shape[1]
 nb_classes = labels.shape[-1]
-#batch_size = nb_nodes//64
+batch_size = round(nb_nodes//2.7)
 
 labels = torch.FloatTensor(labels[np.newaxis])
 idx_train = torch.LongTensor(idx_train)
