@@ -20,11 +20,14 @@ class GCN_new(nn.Module):
         self.Wr[-1].bias.data.fill_(0.0)
         nn.init.xavier_uniform_(self.Wr[0].weight)
         self.g.append(nn.PReLU() if act == 'prelu' else act)
+        self.bns = torch.nn.ModuleList()
+        self.bns.append(torch.nn.BatchNorm1d(hidden_dims[0]))
         for i in range(1, self.num_layers):
             self.Wr.append(nn.Linear(hidden_dims[i-1], hidden_dims[i], bias=True))
             nn.init.xavier_uniform_(self.Wr[-1].weight)
             self.Wr[-1].bias.data.fill_(0.0)
             self.g.append(nn.PReLU() if act == 'prelu' else act)
+            self.bns.append(torch.nn.BatchNorm1d(hidden_dims[i]))
         self.Wr = nn.ModuleList(self.Wr)
         self.g = nn.ModuleList(self.g)
         self.dropout=nn.Dropout(dropout)
@@ -33,11 +36,13 @@ class GCN_new(nn.Module):
         #print("self.Wr.bias is: " + str(self.Wr.bias))
 
     def forward(self, A, AX):
-        temp1 = self.g[0](self.Wr[0](AX))
+        #temp1 = self.g[0](self.Wr[0](AX))
+        temp1 = self.g[0](self.bns[i](self.Wr[0](AX)))
         temp = self.dropout(temp1)
         for i in range(1, self.num_layers):
             temp1 = self.Wr[i](temp)
             temp1 = torch.sparse.mm(A, temp1)
+            temp1 = self.bns[i](temp1)
             temp1 = self.g[i](temp1)
             temp1 = self.dropout(temp1)
             temp=temp1
