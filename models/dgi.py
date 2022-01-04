@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from layers import GCN, AvgReadout, Discriminator
+from torch_geometric.nn import SAGEConv
+import torch.nn.functional as F
 
 class GCN_new(nn.Module):
     def __init__(self, inp_dim, hidden_dims, act, dropout=0.0):
@@ -44,6 +46,75 @@ class GCN_new(nn.Module):
         # return torch.unsqueeze(self.act(self.W(temp)), 0)
         #return torch.unsqueeze(self.g(self.Wr(AX)), 0)
         #return torch.unsqueeze(self.act(self.W(self.g(self.Wr(AX)))),0)
+
+
+class SAGE(torch.nn.Module):
+    def __init__(self, inp_dim, hidden_dims, act, dropout=0.0):
+        super(SAGE, self).__init__()
+
+        self.hidden_dims = hidden_dims
+        self.num_layers = len(hidden_dims)
+        self.convs1 = torch.nn.ModuleList()
+        self.convs2 = torch.nn.ModuleList()
+        self.bns = torch.nn.ModuleList()
+        self.g = torch.nn.ModuleList()
+        self.convs1.append(nn.Linear(inp_dim, hidden_dims[0]))
+        self.convs2.append(nn.Linear(inp_dim, hidden_dims[0]))
+        self.bns.append(torch.nn.BatchNorm1d(hidden_dims[0]))
+        self.dropout=nn.Dropout(dropout)
+        self.g.append(nn.PReLU() if act == 'prelu' else act)
+
+        for i in range(1, self.num_layers):
+            self.convs1.append(nn.Linear(hidden_dims[i-1], hidden_dims[i]))
+            self.convs2.append(nn.Linear(hidden_dims[i-1], hidden_dims[i]))
+            self.bns.append(torch.nn.BatchNorm1d(hidden_dims[i]))
+            self.g.append(nn.PReLU() if act == 'prelu' else act)
+
+    def forward(self, A, X):
+        temp=X
+        for i in range(self.num_layers):
+            temp = self.convs1[i](temp) + self.convs2[i](torch.sparse.mm(A,temp))
+            if i<self.num_layers-1:
+                temp = self.bns[i](temp)
+            temp = self.g[i](temp)
+            temp = self.dropout(temp)
+        return torch.unsqueeze(temp, 0)
+            
+
+
+
+# class SAGE(torch.nn.Module):
+#     def __init__(self, inp_dim, hidden_dims, act, dropout=0.0):
+#         super(SAGE, self).__init__()
+
+#         self.hidden_dims = hidden_dims
+#         self.num_layers = len(hidden_dims)
+#         self.convs = torch.nn.ModuleList()
+#         self.convs.append(SAGEConv(inp_dim, hidden_dims[0]))
+#         self.bns = torch.nn.ModuleList()
+#         self.bns.append(torch.nn.BatchNorm1d(hidden_dims[0]))
+#         for i in range(1, self.num_layers):
+#             self.convs.append(SAGEConv(hidden_dims[i-1], hidden_dims[i]))
+#             self.bns.append(torch.nn.BatchNorm1d(hidden_dims[i]))
+#         # self.convs.append(SAGEConv(hidden_dims[-1], out_channels))
+
+#         self.dropout = dropout
+
+#     def reset_parameters(self):
+#         for conv in self.convs:
+#             conv.reset_parameters()
+#         for bn in self.bns:
+#             bn.reset_parameters()
+
+#     def forward(self, adj_t, x):
+#         for i, conv in enumerate(self.convs):
+#             x = conv(x, adj_t)
+#             x = self.bns[i](x)
+#             x = F.relu(x)
+#             x = F.dropout(x, p=self.dropout, training=self.training)
+#         # x = self.convs[-1](x, adj_t)
+#         return torch.unsqueeze(x, 0)
+#         # return x.log_softmax(dim=-1)
 
 class DGI(nn.Module):
     def __init__(self, n_in, n_h, activation):
