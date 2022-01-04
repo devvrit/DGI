@@ -3,7 +3,7 @@ import torch.nn as nn
 from layers import GCN, AvgReadout, Discriminator
 
 class GCN_new(nn.Module):
-    def __init__(self, inp_dim, hidden_dims, act, dropout=0.0):
+    def __init__(self, inp_dim, hidden_dims, act, dropout=0.2):
         """
         :param inp_dim = dimension of X matrix representing node features
         :param hidden_dims = hidden layer dimensions
@@ -17,11 +17,13 @@ class GCN_new(nn.Module):
         self.num_layers = len(hidden_dims)
         self.inp_dim=inp_dim
         self.Wr.append(nn.Linear(inp_dim, hidden_dims[0], bias=True))
+        self.Wr[-1].bias.data.fill_(0.0)
         nn.init.xavier_uniform_(self.Wr[0].weight)
         self.g.append(nn.PReLU() if act == 'prelu' else act)
         for i in range(1, self.num_layers):
             self.Wr.append(nn.Linear(hidden_dims[i-1], hidden_dims[i], bias=True))
             nn.init.xavier_uniform_(self.Wr[-1].weight)
+            self.Wr[-1].bias.data.fill_(0.0)
             self.g.append(nn.PReLU() if act == 'prelu' else act)
         self.Wr = nn.ModuleList(self.Wr)
         self.g = nn.ModuleList(self.g)
@@ -39,7 +41,7 @@ class GCN_new(nn.Module):
             temp1 = self.g[i](temp1)
             temp1 = self.dropout(temp1)
             temp=temp1
-        return temp
+        return torch.unsqueeze(temp, 0)
         # temp = torch.sparse.mm(A, self.g(self.Wr(AX)))
         # return torch.unsqueeze(self.act(self.W(temp)), 0)
         #return torch.unsqueeze(self.g(self.Wr(AX)), 0)
@@ -53,7 +55,7 @@ class DGI(nn.Module):
 
         self.sigm = nn.Sigmoid()
 
-        self.disc = Discriminator(n_h)
+        self.disc = Discriminator(n_h[-1])
 
     def forward(self, A, AX1, AX2, nodes, sparse, msk, samp_bias1, samp_bias2):
         # h_1 = self.gcn(seq1, adj, sparse)
