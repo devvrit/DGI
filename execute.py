@@ -22,6 +22,7 @@ drop_prob = 0.0
 hid_units = [256,256]
 sparse = True
 nonlinearity = 'prelu' # special name to separate parameters
+use_sage=True
 
 #adj, features, labels, idx_train, idx_val, idx_test = process.load_data(dataset)
 adj, features, labels, idx_train, idx_val, idx_test = process.load_ogbn(dataset)
@@ -39,13 +40,20 @@ idx_test = torch.LongTensor(idx_test)
 
 
 #adj = process.normalize_adj(adj + sp.eye(adj.shape[0]))
-adj = process.normalize_adj(adj)
+if not use_sage:
+    adj = process.normalize_adj(adj)
 
 
 if sparse:
     sp_adj = process.sparse_mx_to_torch_sparse_tensor(adj)
 else:
     adj = (adj + sp.eye(adj.shape[0])).todense()
+if use_sage:
+    D = torch.sparse.mm(sp_adj, torch.ones(nb_nodes, 1).to(device)).view(-1)
+    a = torch.tensor([[i for i in range(nb_nodes)],[i for i in range(nb_nodes)]])
+    D = torch.sparse_coo_tensor(a, D, (nb_nodes, nb_nodes))
+    sp_adj = torch.sparse.mm(sp_adj, D)
+
 features = torch.FloatTensor(features[np.newaxis])
 if torch.cuda.is_available():
     print('Using CUDA')
@@ -60,8 +68,9 @@ if torch.cuda.is_available():
     idx_test = idx_test.cuda()
 
 print("features_size is: " + str(features.size()))
-AX = torch.sparse.mm(sp_adj, features[0])
-print("AX calculated, size is: " + str(AX.size()))
+if not use_sage:
+    AX = torch.sparse.mm(sp_adj, features[0])
+    print("AX calculated, size is: " + str(AX.size()))
 if not sparse:
     adj = torch.FloatTensor(adj[np.newaxis])
 
@@ -86,7 +95,8 @@ for epoch in range(nb_epochs):
     idx = np.random.permutation(nb_nodes)
     #print("idx: " + str(idx))
     shuf_fts = features[:, idx, :]
-    AX2 = torch.sparse.mm(sp_adj, shuf_fts[0]).to(device)
+    if not use_sage:
+        AX2 = torch.sparse.mm(sp_adj, shuf_fts[0]).to(device)
     #if torch.cuda.is_available():
     #    shuf_fts = shuf_fts.cuda()
     while i<nb_nodes:
@@ -98,7 +108,10 @@ for epoch in range(nb_epochs):
         lbl = torch.cat((lbl_1, lbl_2), 1).to(device)
 
         #logits = model(AX[nodes], AX2[nodes], sparse, None, None, None)
-        logits = model(sp_adj, AX, AX2, nodes, sparse, None, None, None)
+        if not use_sage:
+            logits = model(sp_adj, AX, AX2, nodes, sparse, None, None, None)
+        else:
+            logits = model(sp_adj, features[0], shuf_fts[0], nodes, sparse, None, None, None)
         loss = b_xent(logits, lbl)
         #print("epoch " + str(epoch) + " Loss: " + str(loss))
 
@@ -111,7 +124,10 @@ for epoch in range(nb_epochs):
         #    del embeds
         i+=batch_size
     model.eval()
-    embeds, _ = model.embed(sp_adj, AX, sparse, None)
+    if not use_sage:
+        embeds, _ = model.embed(sp_adj, AX, sparse, None)
+    else:
+        embeds, _ = model.embed(sp_adj, features[0], sparse, None)
     torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt_epoch_" + str(epoch+1))
     print("TOTAL LOSS in epoch " + str(epoch) + " is: " + str(tot_loss))
     del embeds

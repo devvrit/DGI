@@ -126,7 +126,8 @@ class SAGE(torch.nn.Module):
 class DGI(nn.Module):
     def __init__(self, n_in, n_h, activation):
         super(DGI, self).__init__()
-        self.gcn = GCN_new(n_in, n_h, activation)
+        # self.gcn = GCN_new(n_in, n_h, activation)
+        self.gcn = SAGE(n_in, n_h, activation)
         self.read = AvgReadout()
 
         self.sigm = nn.Sigmoid()
