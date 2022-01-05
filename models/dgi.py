@@ -67,6 +67,10 @@ class SAGE(torch.nn.Module):
         self.g = torch.nn.ModuleList()
         self.convs1.append(nn.Linear(inp_dim, hidden_dims[0]))
         self.convs2.append(nn.Linear(inp_dim, hidden_dims[0]))
+        nn.init.xavier_uniform_(self.convs1[-1].weight)
+        nn.init.xavier_uniform_(self.convs2[-1].weight)
+        self.convs1[-1].bias.data.fill_(0.0)
+        self.convs2[-1].bias.data.fill_(0.0)
         self.bns.append(torch.nn.BatchNorm1d(hidden_dims[0]))
         self.dropout=nn.Dropout(dropout)
         self.g.append(nn.PReLU() if act == 'prelu' else act)
@@ -74,6 +78,8 @@ class SAGE(torch.nn.Module):
         for i in range(1, self.num_layers):
             self.convs1.append(nn.Linear(hidden_dims[i-1], hidden_dims[i]))
             self.convs2.append(nn.Linear(hidden_dims[i-1], hidden_dims[i]))
+            nn.init.xavier_uniform_(self.convs1[-1].weight)
+            nn.init.xavier_uniform_(self.convs2[-1].weight)
             self.bns.append(torch.nn.BatchNorm1d(hidden_dims[i]))
             self.g.append(nn.PReLU() if act == 'prelu' else act)
 
@@ -81,8 +87,8 @@ class SAGE(torch.nn.Module):
         temp=X
         for i in range(self.num_layers):
             temp = self.convs1[i](temp) + self.convs2[i](torch.sparse.mm(A,temp))
-            if i<self.num_layers-1:
-                temp = self.bns[i](temp)
+            #if i<self.num_layers-1:
+            #    temp = self.bns[i](temp)
             temp = self.g[i](temp)
             temp = self.dropout(temp)
         return torch.unsqueeze(temp, 0)

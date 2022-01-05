@@ -49,10 +49,10 @@ if sparse:
 else:
     adj = (adj + sp.eye(adj.shape[0])).todense()
 if use_sage:
-    D = torch.sparse.mm(sp_adj, torch.ones(nb_nodes, 1).to(device)).view(-1)
-    a = torch.tensor([[i for i in range(nb_nodes)],[i for i in range(nb_nodes)]])
+    D = torch.sparse.mm(sp_adj.cpu(), torch.ones(nb_nodes, 1)).to(device).view(-1)
+    a = torch.tensor([[i for i in range(nb_nodes)],[i for i in range(nb_nodes)]]).to(device)
     D = torch.sparse_coo_tensor(a, D, (nb_nodes, nb_nodes))
-    sp_adj = torch.sparse.mm(sp_adj, D)
+    sp_adj = torch.sparse.mm(sp_adj.to(device), D)
 
 features = torch.FloatTensor(features[np.newaxis])
 if torch.cuda.is_available():
