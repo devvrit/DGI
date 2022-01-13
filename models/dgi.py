@@ -5,7 +5,7 @@ from torch_geometric.nn import SAGEConv
 import torch.nn.functional as F
 
 class GCN_new(nn.Module):
-    def __init__(self, inp_dim, hidden_dims, act, dropout=0.2):
+    def __init__(self, inp_dim, hidden_dims, act, dropout=0.0):
         """
         :param inp_dim = dimension of X matrix representing node features
         :param hidden_dims = hidden layer dimensions
@@ -38,13 +38,13 @@ class GCN_new(nn.Module):
         #print("self.Wr.bias is: " + str(self.Wr.bias))
 
     def forward(self, A, AX):
-        #temp1 = self.g[0](self.Wr[0](AX))
-        temp1 = self.g[0](self.bns[i](self.Wr[0](AX)))
+        temp1 = self.g[0](self.Wr[0](AX))
+        #temp1 = self.g[0](self.bns[0](self.Wr[0](AX)))
         temp = self.dropout(temp1)
         for i in range(1, self.num_layers):
             temp1 = self.Wr[i](temp)
             temp1 = torch.sparse.mm(A, temp1)
-            temp1 = self.bns[i](temp1)
+            #temp1 = self.bns[i](temp1)
             temp1 = self.g[i](temp1)
             temp1 = self.dropout(temp1)
             temp=temp1
@@ -132,8 +132,8 @@ class SAGE(torch.nn.Module):
 class DGI(nn.Module):
     def __init__(self, n_in, n_h, activation):
         super(DGI, self).__init__()
-        # self.gcn = GCN_new(n_in, n_h, activation)
-        self.gcn = SAGE(n_in, n_h, activation)
+        self.gcn = GCN_new(n_in, n_h, activation)
+        # self.gcn = SAGE(n_in, n_h, activation)
         self.read = AvgReadout()
 
         self.sigm = nn.Sigmoid()

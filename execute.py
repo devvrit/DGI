@@ -15,14 +15,14 @@ dataset = 'ogbn-arxiv'
 #batch_size = 2708
 # batch_size = round(169343//2.7)
 nb_epochs = 1000
-patience = 25
-lr = 0.0001
+patience = 10
+lr = 0.001
 l2_coef = 0.0
 drop_prob = 0.0
-hid_units = [256,256]
+hid_units = [512]
 sparse = True
 nonlinearity = 'prelu' # special name to separate parameters
-use_sage=True
+use_sage=False
 
 #adj, features, labels, idx_train, idx_val, idx_test = process.load_data(dataset)
 adj, features, labels, idx_train, idx_val, idx_test = process.load_ogbn(dataset)
@@ -31,7 +31,7 @@ features, _ = process.preprocess_features(features)
 nb_nodes = features.shape[0]
 ft_size = features.shape[1]
 nb_classes = labels.shape[-1]
-batch_size = round(nb_nodes//16)
+batch_size = round(nb_nodes//8)
 
 labels = torch.FloatTensor(labels[np.newaxis])
 idx_train = torch.LongTensor(idx_train)
@@ -149,7 +149,11 @@ for epoch in range(nb_epochs):
 
 print('Loading {}th epoch'.format(best_t))
 model.load_state_dict(torch.load('best_dgi.pkl'))
-embeds, _ = model.embed(sp_adj, AX, sparse, None)
+#embeds, _ = model.embed(sp_adj, AX, sparse, None)
+if not use_sage:
+    embeds, _ = model.embed(sp_adj, AX, sparse, None)
+else:
+    embeds, _ = model.embed(sp_adj, features[0], sparse, None)
 print("EMBEDDING CALCULATED")
 torch.save(embeds, "embeddding_dgi_ogbn_arxiv.pt")
 
@@ -215,7 +219,7 @@ tot = tot.cuda()
 accs = []
 
 for _ in range(50):
-    log = LogReg(hid_units, nb_classes)
+    log = LogReg(hid_units[-1], nb_classes)
     opt = torch.optim.Adam(log.parameters(), lr=0.01, weight_decay=0.0)
     log.cuda()
 
