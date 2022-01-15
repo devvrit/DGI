@@ -8,6 +8,8 @@ from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 from torch_geometric.nn import SAGEConv
 from torch_geometric.nn import DeepGraphInfomax
+from torch_geometric.utils import to_undirected, add_remaining_self_loops
+from ogb.nodeproppred import PygNodePropPredDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -99,13 +101,14 @@ def test():
         adjs = [adj.to(device) for adj in adjs]
         zs.append(model(x[n_id], adjs)[0])
     z = torch.cat(zs, dim=0)
+    torch.save(z, "embedding_products.pt")
     train_val_mask = data.train_idx | data.valid_idx
     acc = model.test(z[train_val_mask], y[train_val_mask], z[data.test_idx],
                      y[data.test_idx], max_iter=10000)
     return acc
 
 
-for epoch in range(1, 31):
+for epoch in range(1, 6):
     loss = train(epoch)
     print(f'Epoch {epoch:02d}, Loss: {loss:.4f}')
 
