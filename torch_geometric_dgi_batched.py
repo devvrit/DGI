@@ -25,11 +25,11 @@ data.edge_index = to_undirected(add_remaining_self_loops(data.edge_index)[0])
 
 
 train_loader = NeighborSampler(data.edge_index, node_idx=None,
-                               sizes=[15, 10, 5], batch_size=1024,
+                               sizes=[25, 20, 10], batch_size=2048,
                                shuffle=True, num_workers=12)
 
 test_loader = NeighborSampler(data.edge_index, node_idx=None,
-                              sizes=[15, 10, 5], batch_size=1024,
+                              sizes=[25, 20, 10], batch_size=2048,
                               shuffle=False, num_workers=12)
 
 
@@ -93,7 +93,7 @@ def train(epoch):
 
 
 @torch.no_grad()
-def test():
+def test(e):
     model.eval()
 
     zs = []
@@ -101,16 +101,19 @@ def test():
         adjs = [adj.to(device) for adj in adjs]
         zs.append(model(x[n_id], adjs)[0])
     z = torch.cat(zs, dim=0)
-    torch.save(z, "embedding_products.pt")
+    torch.save(z, "embedding_products.pt_epoch_" + str(e))
+    return
     train_val_mask = data.train_idx | data.valid_idx
     acc = model.test(z[train_val_mask], y[train_val_mask], z[data.test_idx],
                      y[data.test_idx], max_iter=10000)
     return acc
 
 
-for epoch in range(1, 6):
+for epoch in range(1, 21):
+    model.train()
     loss = train(epoch)
     print(f'Epoch {epoch:02d}, Loss: {loss:.4f}')
+    test(epoch)
 
 test_acc = test()
 print(f'Test Accuracy: {test_acc:.4f}')

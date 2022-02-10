@@ -8,12 +8,14 @@ from ogb.nodeproppred import PygNodePropPredDataset
 from torch_geometric.utils import to_undirected, add_remaining_self_loops
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#dataset = 'Cora'
-#path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', dataset)
-#dataset = Planetoid(path, dataset)
+dataset = 'Pubmed'
+path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', dataset)
+dataset = Planetoid(path, dataset)
+'''
 dataset = PygNodePropPredDataset(name = "ogbn-arxiv")
 split_idx = dataset.get_idx_split()
 train_idx, valid_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
+'''
 data = dataset[0].to(device)
 data.edge_index = to_undirected(add_remaining_self_loops(data.edge_index)[0])
 
@@ -55,17 +57,22 @@ def train():
     return loss.item()
 
 
-def test():
+def test(e):
     model.eval()
     z, _, _ = model(data.x, data.edge_index)
-    torch.save(z, "embedding.pt")
+    torch.save(z, "embedding.pt_epoch_"+str(e))
+    #torch.save(z, "embedding.pt")
+    return
     acc = model.test(z[train_idx], data.y[train_idx],
                      z[test_idx], data.y[test_idx], max_iter=150)
     return acc
 
 
 for epoch in range(1, 101):
+    model.train()
     loss = train()
     print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
-acc = test()
+    if epoch<11 or epoch%5==0:
+        test(epoch)
+#acc = test()
 print(f'Accuracy: {acc:.4f}')
