@@ -2,6 +2,8 @@ import os.path as osp
 
 import torch
 import torch.nn as nn
+import numpy as np
+from sklearn import metrics
 
 from tqdm import tqdm
 from torch_geometric.datasets import Reddit
@@ -75,18 +77,39 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # data = dataset[0]
 # data.edge_index = to_undirected(add_remaining_self_loops(data.edge_index)[0])
 
-edge_index = torch.load("edge_index_papers100M.pt")
-x = torch.load("x_papers100M.pt")
-y = torch.load("y_papers100M.pt")
-indices = torch.load("indices_papers100M.pt")
+# +
 
-train_loader = NeighborSampler(data.edge_index, node_idx=None,
+direct = "/home/devvrit_03/GraphNN/clean_codes/"
+
+print("Loading edge index")
+edge_index = torch.load(direct+"edge_index_papers100M.pt")
+print("Done. Loading X")
+x = torch.load(direct+"x_papers100M.pt")
+print("Done. Loading Y and indices")
+y = torch.load(direct+"y_papers100M.pt")
+indices = torch.load(direct+"indices_papers100M.pt")
+
+'''
+edge_index = torch.load(direct+"edge_index_ogbn-arxiv.pt")
+x = torch.load(direct+"x_ogbn-arxiv.pt")
+y = torch.load(direct+"y_ogbn-arxiv.pt")
+indices = torch.load(direct+"indices_ogbn-arxiv.pt")
+'''
+'''
+edge_index = torch.load(direct+"edge_index_ogbn-products.pt")
+x = torch.load(direct+"x_ogbn-products.pt")
+y = torch.load(direct+"y_ogbn-products.pt")
+indices = torch.load(direct+"indices_ogbn-products.pt")
+'''
+# -
+
+train_loader = NeighborSampler(edge_index, node_idx=None,
                                sizes=[25, 20, 10], batch_size=2048,
-                               shuffle=True, num_workers=12)
+                               shuffle=True, num_workers=0)
 
-test_loader = NeighborSampler(data.edge_index, node_idx=indices,
-                              sizes=[25, 20, 10], batch_size=20000,
-                              shuffle=False, num_workers=12)
+test_loader = NeighborSampler(edge_index, node_idx=indices,
+                              sizes=[25, 20, 10], batch_size=2048,
+                              shuffle=False, num_workers=0)
 
 
 class Encoder(nn.Module):
@@ -118,12 +141,12 @@ def corruption(x, edge_index):
 
 
 model = DeepGraphInfomax(
-    hidden_channels=512, encoder=Encoder(dataset.num_features, 512),
+    hidden_channels=512, encoder=Encoder(x.size(-1), 512),
     summary=lambda z, *args, **kwargs: torch.sigmoid(z.mean(dim=0)),
     corruption=corruption).to(device)
 
 model = model.to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
 # x, y = data.x.to(device), data.y.to(device)
 best_nmi=-1
@@ -133,11 +156,12 @@ def train(epoch):
 
     total_loss = total_examples = 0
     it = 0
+    best_nmi=-1
     for batch_size, n_id, adjs in tqdm(train_loader,
                                        desc=f'Epoch {epoch:02d}'):
         # `adjs` holds a list of `(edge_index, e_id, size)` tuples.
+        model.train()
         adjs = [adj.to(device) for adj in adjs]
-
         optimizer.zero_grad()
         pos_z, neg_z, summary = model(x[n_id].to(device), adjs)
         loss = model.loss(pos_z, neg_z, summary)
@@ -145,18 +169,28 @@ def train(epoch):
         optimizer.step()
         total_loss += float(loss) * pos_z.size(0)
         total_examples += pos_z.size(0)
+        
         it+=1
-        if it%100==0:
-            zs = []
-            for i, (batch_size, n_id, adjs) in enumerate(test_loader):
-                adjs = [adj.to(device) for adj in adjs]
-                zs.append(model(x[n_id].to(device), adjs)[0])
-            zs = torch.cat(zs, dim=0)
-            y_pred,_ = Kmeans(zs, y[indices].max()+1)
-            nmi = metrics.normalized_mutual_info_score(y[indices].cpu().numpy(), y_pred.cpu().numpy())
+        del pos_z,neg_z,summary,loss
+        if it%1000==0:
+            y_gt = []
+            model.eval()
+            with torch.no_grad():
+                zs = []
+                #for i, (batch_size, n_id, adjs) in enumerate(test_loader):
+                for batch_size, n_id, adjs in tqdm(test_loader, desc=f'Test niter {it:02d}'):
+                    adjs = [adj.to(device) for adj in adjs]
+                    zs.append(model(x[n_id].to(device), adjs)[0])
+                    y_gt = y_gt + y[n_id[:batch_size]].tolist()
+                zs = torch.cat(zs, dim=0)
+                zs = torch.nn.functional.normalize(zs)
+                y_pred,_ = Kmeans(zs, y[indices].max()+1)
+            nmi = metrics.normalized_mutual_info_score(np.array(y_gt), y_pred.cpu().numpy())
             if nmi>best_nmi:
                 best_nmi=nmi
-            print("epoch: " + str(epoch) + ", iter= "+str(it)+", nmi: " + str(round(nmi, 5))+"best_nmi= " + str(round(best_nmi,5)))
+                torch.save(zs, "embedding_metis_papers100M.pt")
+                torch.save(torch.tensor(y_gt), "y_gt_papers100M.pt")
+            print("epoch: " + str(epoch) + ", iter= "+str(it)+", nmi: " + str(round(nmi, 5))+", best_nmi= " + str(round(best_nmi,5)))
     return total_loss / total_examples
 
 
@@ -185,3 +219,7 @@ for epoch in range(1, 21):
 
 test_acc = test()
 print(f'Test Accuracy: {test_acc:.4f}')
+
+indices
+
+
