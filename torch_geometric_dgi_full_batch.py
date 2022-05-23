@@ -7,18 +7,21 @@ from torch_geometric.nn import GCNConv, DeepGraphInfomax
 from ogb.nodeproppred import PygNodePropPredDataset
 from torch_geometric.utils import to_undirected, add_remaining_self_loops
 
+# +
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-dataset = 'Pubmed'
-path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', dataset)
-dataset = Planetoid(path, dataset)
-'''
-dataset = PygNodePropPredDataset(name = "ogbn-arxiv")
+# dataset = 'Pubmed'
+# path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', dataset)
+# dataset = Planetoid(path, dataset)
+
+dataset = PygNodePropPredDataset(name = "ogbn-arxiv", root="/home/devvrit_03/GraphNN/clean_codes/dataset")
 split_idx = dataset.get_idx_split()
 train_idx, valid_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
-'''
+
 data = dataset[0].to(device)
 data.edge_index = to_undirected(add_remaining_self_loops(data.edge_index)[0])
 
+
+# -
 
 class Encoder(nn.Module):
     def __init__(self, in_channels, hidden_channels):
@@ -68,7 +71,7 @@ def test(e):
     return acc
 
 
-for epoch in range(1, 101):
+for epoch in range(1, 10):
     model.train()
     loss = train()
     print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
@@ -76,3 +79,5 @@ for epoch in range(1, 101):
         test(epoch)
 #acc = test()
 print(f'Accuracy: {acc:.4f}')
+
+

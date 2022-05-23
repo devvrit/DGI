@@ -65,7 +65,7 @@ def Kmeans(x, K=-1, Niter=10, verbose=False):
         c /= Ncl  # in-place division to compute the average
     return cl, c
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
 
 # path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', 'Reddit')
 # dataset = Reddit(path)
@@ -80,7 +80,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # +
 
 direct = "/home/devvrit_03/GraphNN/clean_codes/"
-
+'''
 print("Loading edge index")
 edge_index = torch.load(direct+"edge_index_papers100M.pt")
 print("Done. Loading X")
@@ -88,19 +88,19 @@ x = torch.load(direct+"x_papers100M.pt")
 print("Done. Loading Y and indices")
 y = torch.load(direct+"y_papers100M.pt")
 indices = torch.load(direct+"indices_papers100M.pt")
-
+'''
 '''
 edge_index = torch.load(direct+"edge_index_ogbn-arxiv.pt")
 x = torch.load(direct+"x_ogbn-arxiv.pt")
 y = torch.load(direct+"y_ogbn-arxiv.pt")
 indices = torch.load(direct+"indices_ogbn-arxiv.pt")
 '''
-'''
-edge_index = torch.load(direct+"edge_index_ogbn-products.pt")
-x = torch.load(direct+"x_ogbn-products.pt")
-y = torch.load(direct+"y_ogbn-products.pt")
-indices = torch.load(direct+"indices_ogbn-products.pt")
-'''
+
+edge_index = torch.load(direct+"edge_index_ogbn-products.pt").to(device)
+x = torch.load(direct+"x_ogbn-products.pt").to(device)
+y = torch.load(direct+"y_ogbn-products.pt").to(device)
+indices = torch.load(direct+"indices_ogbn-products.pt").to(device)
+
 # -
 
 train_loader = NeighborSampler(edge_index, node_idx=None,
@@ -171,8 +171,8 @@ def train(epoch):
         total_examples += pos_z.size(0)
         
         it+=1
-        del pos_z,neg_z,summary,loss
-        if it%1000==0:
+#         del pos_z,neg_z,summary,loss
+        if (it%80==0) or (it%len(train_loader)==0):
             y_gt = []
             model.eval()
             with torch.no_grad():
@@ -188,8 +188,8 @@ def train(epoch):
             nmi = metrics.normalized_mutual_info_score(np.array(y_gt), y_pred.cpu().numpy())
             if nmi>best_nmi:
                 best_nmi=nmi
-                torch.save(zs, "embedding_metis_papers100M.pt")
-                torch.save(torch.tensor(y_gt), "y_gt_papers100M.pt")
+#                 torch.save(zs, "embedding_metis_papers100M.pt")
+#                 torch.save(torch.tensor(y_gt), "y_gt_papers100M.pt")
             print("epoch: " + str(epoch) + ", iter= "+str(it)+", nmi: " + str(round(nmi, 5))+", best_nmi= " + str(round(best_nmi,5)))
     return total_loss / total_examples
 
@@ -221,5 +221,7 @@ test_acc = test()
 print(f'Test Accuracy: {test_acc:.4f}')
 
 indices
+
+len(train_loader)
 
 
